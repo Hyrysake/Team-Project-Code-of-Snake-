@@ -1,21 +1,24 @@
 import datetime
 import pickle
+
 class Note:
-    def __init__(self, title, text):
+    def __init__(self, title, text, tags=None):
         self.title = title
         self.text = text
+        self.tags = [] if tags is None else tags
         self.created_at = datetime.datetime.now()
 
     def __repr__(self):
         date_str = self.created_at.strftime('%Y-%m-%d %H:%M:%S')
-        return f'[{date_str}] {self.title} - {self.text}'
+        tags_str = f"[Tags: {', '.join(self.tags)}]" if self.tags else ""
+        return f'[{date_str}] {self.title} - {self.text} {tags_str}'
 
 class Notebook:
     def __init__(self):
         self.notes = []
 
-    def add(self, title, text):
-        note = Note(title, text)
+    def add(self, title, text, tags=None):
+        note = Note(title, text, tags)
         self.notes.append(note)
 
     def delete(self, index):
@@ -31,13 +34,15 @@ class Notebook:
     def clear_all(self):
         self.notes = []
 
-    def edit(self, index, new_title=None, new_text=None):
+    def edit(self, index, new_title=None, new_text=None, new_tags=None):
         try:
             note = self.notes[index]
             if new_title:
                 note.title = new_title
             if new_text:
                 note.text = new_text
+            if new_tags is not None:
+                note.tags = new_tags
             return True
         except IndexError:
             return False
@@ -53,6 +58,28 @@ class Notebook:
         except FileNotFoundError:
             pass
 
+    def search(self, keyword):
+        matching_notes = []
+        for note in self.notes:
+            if keyword in note.title or keyword in note.text or keyword in note.tags:
+                matching_notes.append(note)
+        return matching_notes
+
+    def add_tag(self, index, tag):
+        try:
+            note = self.notes[index]
+            if tag:
+                note.tags.append(tag)
+            return True
+        except IndexError:
+            return False
+
+    def list_tags(self):
+        all_tags = set()
+        for note in self.notes:
+            all_tags.update(note.tags)
+        return list(all_tags)
+
 def input_with_retry(prompt, validation_func=None, error_message="Invalid input!"):
     while True:
         data = input(prompt)
@@ -65,14 +92,16 @@ def notebook_interface():
     notebook.load_from_file()
     while True:
         command = input_with_retry(
-            "\nChoose an option in notes ('add', 'delete', 'edit', 'list', 'clear', 'exit'): ",
-            lambda x: x in ['add', 'delete', 'edit', 'list', 'clear', 'exit']
+            "\nChoose an option in notes ('add', 'search', 'delete', 'edit', 'list', 'clear', 'tags', 'exit'): ",
+            lambda x: x in ['add', 'delete', 'edit', 'list', 'clear', 'exit', 'search', 'tags']
         ).strip().lower()
 
         if command == 'add':
             title = input_with_retry("Enter note title: ", lambda x: x != "")
             text = input_with_retry("Enter note text: ", lambda x: x != "")
-            notebook.add(title, text)
+            tags = input("Enter tags (comma separated, leave blank for none): ").split(',')
+            tags = [tag.strip() for tag in tags if tag.strip()]
+            notebook.add(title, text, tags)
             notebook.save_to_file()
 
         elif command == 'edit':
@@ -92,7 +121,10 @@ def notebook_interface():
             if not new_text:
                 new_text = None
 
-            if notebook.edit(index, new_title, new_text):
+            new_tags = input("Enter new tags (comma separated, leave blank for none): ").split(',')
+            new_tags = [tag.strip() for tag in new_tags if tag.strip()]
+
+            if notebook.edit(index, new_title, new_text, new_tags):
                 print("Note updated successfully!")
             else:
                 print("Invalid index!")
@@ -109,6 +141,16 @@ def notebook_interface():
             notebook.delete(index)
             notebook.save_to_file()
 
+        elif command == 'search':
+            keyword = input_with_retry("Enter a keyword to search for: ", lambda x: x != "")
+            matching_notes = notebook.search(keyword)
+            if matching_notes:
+                print("Matching notes:")
+                for note in matching_notes:
+                    print(note)
+            else:
+                print("No matching notes found.")
+
         elif command == 'list':
             notebook.list_notes()
 
@@ -116,6 +158,13 @@ def notebook_interface():
             notebook.clear_all()
             print("All notes have been cleared.")
             notebook.save_to_file()
+
+        elif command == 'tags':
+            tags = notebook.list_tags()
+            if tags:
+                print("Tags: ", ', '.join(tags))
+            else:
+                print("No tags found.")
 
         elif command == 'exit':
             break
